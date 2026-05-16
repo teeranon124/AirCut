@@ -58,10 +58,13 @@ function App() {
     setCurrentTime(time);
   };
 
+  const handleToggleCut = (e, idx) => {
+    e.stopPropagation();
+    setCutIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
+  };
+
   const calculatedKeepRanges = React.useMemo(() => {
     if (!data) return [];
-    // If no segments (subtitles disabled), fallback to a large duration or get it from metadata if possible
-    // For now, using a large fallback or 3600 as before
     const totalDuration = 3600; 
     const padding = 0.2;
     let keeps = [];
@@ -103,7 +106,7 @@ function App() {
           {status === 'processing' && (
             <div className="flex items-center gap-2 text-slate-500 text-sm bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
               <Loader2 className="animate-spin w-4 h-4 text-indigo-500" />
-              <span className="font-bold">กำลังประมวลผล...</span>
+              <span className="font-bold text-xs">กำลังประมวลผล...</span>
             </div>
           )}
         </div>
@@ -134,61 +137,49 @@ function App() {
         {status === 'failed' && (
           <div className="max-w-md mx-auto bg-white border border-red-100 p-8 rounded-2xl shadow-xl text-center">
             <XCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-slate-800 text-center">เกิดข้อผิดพลาด</h2>
+            <h2 className="text-xl font-bold">เกิดข้อผิดพลาด</h2>
             <p className="text-slate-500 mt-2 text-sm">{error}</p>
-            <button onClick={() => setStatus('idle')} className="mt-6 w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors">ลองใหม่อีกครั้ง</button>
+            <button onClick={() => setStatus('idle')} className="mt-6 w-full py-3 bg-slate-800 text-white rounded-xl font-bold">ลองใหม่อีกครั้ง</button>
           </div>
         )}
 
         {status === 'completed' && data && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-12 space-y-6">
+            {/* Left Column: Video Preview */}
+            <div className="lg:col-span-7 lg:sticky lg:top-24">
               <VideoPreview 
                 videoUrl={`${API_BASE}/previews/${data.video_filename}`} 
                 seekTime={seekTime}
                 currentTime={currentTime}
                 cutRanges={cutRanges}
                 onTimeUpdate={(t) => setCurrentTime(t)}
-                // activeSubtitle removed for production
+              />
+            </div>
+            
+            {/* Right Column: Editor & Export */}
+            <div className="lg:col-span-5 space-y-8 pb-20">
+              <SilenceEditor 
+                silence={data.silence} 
+                cutIndices={cutIndices} 
+                onToggleCut={handleToggleCut} 
+                onSeek={handleSeek} 
               />
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <SilenceEditor 
-                  silence={data.silence} 
-                  cutIndices={cutIndices} 
-                  onToggleCut={(e, idx) => setCutIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} 
-                  onSeek={handleSeek} 
-                />
-                
-                <div className="space-y-6">
-                   <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                      <h3 className="font-black text-slate-800 mb-2 uppercase tracking-widest text-xs">สรุปผลการตัดต่อ</h3>
-                      <p className="text-sm text-slate-500 leading-relaxed">
-                        ระบบทำการตรวจพบช่วงเงียบทั้งหมด <strong>{data.silence.length}</strong> จุด 
-                        หากคุณยืนยันตามนี้ วิดีโอจะถูกตัดต่ออย่างรวดเร็วด้วยเทคนิค Stream Copy
-                      </p>
-                   </div>
-                   <ExportButton 
-                    jobId={jobId} 
-                    keepRanges={calculatedKeepRanges} 
-                    subtitles={data.segments} 
-                    apiBase={API_BASE} 
-                    isPro={isPro} 
-                  />
-                </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <h3 className="font-black text-slate-800 mb-2 uppercase tracking-widest text-[10px]">สรุปผลการตัดต่อ</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  ระบบตรวจพบช่วงเงียบ <strong>{data.silence.length}</strong> จุด 
+                  วิดีโอจะถูกตัดต่ออย่างรวดเร็วด้วยเทคนิค Stream Copy
+                </p>
               </div>
 
-              {/* SubtitleEditor HIDDEN FOR PRODUCTION */}
-              {/* 
-              {data.segments?.length > 0 && (
-                <SubtitleEditor 
-                  initialSegments={data.segments} 
-                  activeTime={currentTime} 
-                  onUpdate={(newSegments) => setData(prev => ({...prev, segments: newSegments}))} 
-                  onSeek={handleSeek} 
-                />
-              )}
-              */}
+              <ExportButton 
+                jobId={jobId} 
+                keepRanges={calculatedKeepRanges} 
+                subtitles={data.segments} 
+                apiBase={API_BASE} 
+                isPro={isPro} 
+              />
             </div>
           </div>
         )}
