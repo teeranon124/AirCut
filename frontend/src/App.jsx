@@ -7,7 +7,7 @@ import ExportButton from './components/ExportButton';
 import VideoPreview from './components/VideoPreview';
 import { Loader2, XCircle } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'https://aircut.onrender.com';
 
 function App() {
   const [jobId, setJobId] = useState(null);
