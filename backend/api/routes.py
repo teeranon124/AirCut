@@ -95,34 +95,25 @@ async def export_project(request: ExportRequest):
     job_data = jobs[job_id]
     input_video = job_data["video_path"]
     output_video = os.path.join(UPLOAD_DIR, f"{job_id}_output.mp4")
-    srt_path = os.path.join(UPLOAD_DIR, f"{job_id}.srt")
-    zip_path = os.path.join(UPLOAD_DIR, f"{job_id}_export.zip")
     
-    success = slice_video(input_video, output_video, request.keep_ranges)
+    # 1. Slice Video
+    success = slice_video(input_video, output_video, request.keep_ranges, job_id)
     if not success:
         raise HTTPException(status_code=500, detail="Video slicing failed")
         
-    # srt_content = format_to_srt(request.subtitles)
-    # with open(srt_path, "w", encoding="utf-8") as f:
-    #     f.write(srt_content)
-    
-    files_to_zip = [output_video]
-    if os.path.exists(srt_path):
-        files_to_zip.append(srt_path)
-        
-    create_export_zip(zip_path, files_to_zip)
+    # Return direct video download URL
     return {"download_url": f"/download/{job_id}"}
 
 @router.get("/download/{job_id}")
 async def download_file(job_id: str, background_tasks: BackgroundTasks):
-    zip_path = os.path.join(UPLOAD_DIR, f"{job_id}_export.zip")
-    if not os.path.exists(zip_path):
-        raise HTTPException(status_code=404, detail="Export file not found")
+    video_path = os.path.join(UPLOAD_DIR, f"{job_id}_output.mp4")
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Exported video not found")
     
     # สั่งลบไฟล์ขยะทั้งหมดที่เกี่ยวกับ Job นี้หลังจากส่งไฟล์ให้ลูกค้าแล้ว
     background_tasks.add_task(cleanup_job_files, job_id)
     
-    return FileResponse(zip_path, media_type='application/zip', filename="autocut_export.zip")
+    return FileResponse(video_path, media_type='video/mp4', filename="autocut_video.mp4")
 
 def cleanup_job_files(job_id: str):
     """

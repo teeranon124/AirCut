@@ -83,7 +83,19 @@ function App() {
     return cutIndices.length === 0 ? [[0, totalDuration]] : keeps;
   }, [data, cutIndices]);
 
-  const cutRanges = data ? cutIndices.map(i => [data.silence[i][0]/1000, data.silence[i][1]/1000]) : [];
+  const cutRanges = React.useMemo(() => {
+    if (!calculatedKeepRanges || calculatedKeepRanges.length <= 1) return [];
+    let gaps = [];
+    // Calculate gaps between keep ranges (these are the segments to skip)
+    for (let i = 0; i < calculatedKeepRanges.length - 1; i++) {
+      const currentEnd = calculatedKeepRanges[i][1];
+      const nextStart = calculatedKeepRanges[i+1][0];
+      if (nextStart > currentEnd) {
+        gaps.push([currentEnd, nextStart]);
+      }
+    }
+    return gaps;
+  }, [calculatedKeepRanges]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
@@ -150,8 +162,8 @@ function App() {
 
         {status === 'completed' && data && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Column: Video Preview */}
-            <div className="lg:col-span-7 lg:sticky lg:top-24">
+            {/* Left Column: Video Preview & Export */}
+            <div className="lg:col-span-7 lg:sticky lg:top-24 space-y-6">
               <VideoPreview 
                 videoUrl={`${API_BASE}/previews/${data.video_filename}`} 
                 seekTime={seekTime}
@@ -159,9 +171,16 @@ function App() {
                 cutRanges={cutRanges}
                 onTimeUpdate={(t) => setCurrentTime(t)}
               />
+              <ExportButton 
+                jobId={jobId} 
+                keepRanges={calculatedKeepRanges} 
+                subtitles={data.segments} 
+                apiBase={API_BASE} 
+                isPro={isPro} 
+              />
             </div>
             
-            {/* Right Column: Editor & Export */}
+            {/* Right Column: Editor */}
             <div className="lg:col-span-5 space-y-8 pb-20">
               <SilenceEditor 
                 silence={data.silence} 
@@ -177,14 +196,6 @@ function App() {
                   วิดีโอจะถูกตัดต่ออย่างรวดเร็วด้วยเทคนิค Stream Copy
                 </p>
               </div>
-
-              <ExportButton 
-                jobId={jobId} 
-                keepRanges={calculatedKeepRanges} 
-                subtitles={data.segments} 
-                apiBase={API_BASE} 
-                isPro={isPro} 
-              />
             </div>
           </div>
         )}

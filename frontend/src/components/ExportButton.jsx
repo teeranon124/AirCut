@@ -37,11 +37,11 @@ function ExportButton({ jobId, keepRanges, subtitles, apiBase, isPro }) {
               : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
           {loading ? (
-            <span className="flex items-center gap-2 italic text-sm">Packing...</span>
+            <span className="flex items-center gap-2 italic text-sm">Processing Video...</span>
           ) : (
             <>
               {isPro ? <Rocket className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              <span>{isPro ? 'ยืนยันและดาวน์โหลด Zip' : 'อัปเกรดเพื่อ Export'}</span>
+              <span>{isPro ? 'ยืนยันและดาวน์โหลด .mp4' : 'อัปเกรดเพื่อ Export'}</span>
             </>
           )}
         </button>
@@ -51,7 +51,7 @@ function ExportButton({ jobId, keepRanges, subtitles, apiBase, isPro }) {
           className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all"
         >
           <Download className="w-4 h-4" />
-          ดาวน์โหลดไฟล์ (.zip)
+          ดาวน์โหลดวิดีโอ (.mp4)
         </a>
       )}
       <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest">Fast Stream Copy Enabled</p>

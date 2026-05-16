@@ -2,39 +2,40 @@ import ffmpeg
 import os
 import zipfile
 
-def slice_video(input_path: str, output_path: str, keep_ranges: list) -> bool:
+def slice_video(input_path: str, output_path: str, keep_ranges: list, job_id: str) -> bool:
     """
-    Slices video segments and concatenates them using FFmpeg stream copy.
-    keep_ranges: list of tuples (start_sec, end_sec)
+    Slices and joins video segments accurately using FFmpeg filters.
+    Forces re-encoding with a fast preset to ensure perfect joins.
     """
     if not keep_ranges:
         return False
 
-    temp_files = []
     try:
-        # Create temporary segments
+        input_stream = ffmpeg.input(input_path)
+        video_segments = []
+        audio_segments = []
+
+        # Create filter chains for each keep range
         for i, (start, end) in enumerate(keep_ranges):
-            temp_segment = f"temp_seg_{i}.mp4"
-            (
-                ffmpeg
-                .input(input_path, ss=start, to=end)
-                .output(temp_segment, c="copy")
-                .overwrite_output()
-                .run(quiet=True)
-            )
-            temp_files.append(temp_segment)
+            v = input_stream.video.trim(start=start, end=end).setpts('PTS-STARTPTS')
+            a = input_stream.audio.filter('atrim', start=start, end=end).filter('asetpts', 'PTS-STARTPTS')
+            video_segments.append(v)
+            audio_segments.append(a)
 
-        # Create concat file
-        concat_list_path = "concat_list.txt"
-        with open(concat_list_path, "w") as f:
-            for temp_file in temp_files:
-                f.write(f"file '{temp_file}'\n")
-
-        # Concatenate
+        # Concat all segments into a single video/audio stream
+        joined = ffmpeg.concat(*video_segments, *audio_segments, v=1, a=1).node
+        
+        # Output with fast encoding to ensure accuracy and speed
         (
             ffmpeg
-            .input(concat_list_path, format='concat', safe=0)
-            .output(output_path, c="copy")
+            .output(
+                joined[0], joined[1], 
+                output_path, 
+                vcodec='libx264', 
+                acodec='aac', 
+                preset='ultrafast', # Maximize speed
+                crf=23              # Standard quality balance
+            )
             .overwrite_output()
             .run(quiet=True)
         )
@@ -42,13 +43,6 @@ def slice_video(input_path: str, output_path: str, keep_ranges: list) -> bool:
     except ffmpeg.Error as e:
         print(f"Error slicing video: {e}")
         return False
-    finally:
-        # Cleanup
-        for f in temp_files:
-            if os.path.exists(f):
-                os.remove(f)
-        if os.path.exists("concat_list.txt"):
-            os.remove("concat_list.txt")
 
 def create_export_zip(zip_path: str, files_to_include: list):
     """

@@ -28,12 +28,12 @@ function VideoPreview({ videoUrl, seekTime, currentTime, cutRanges, onTimeUpdate
 
     // Skip logic for Preview Mode
     if (cutRanges && isPreviewMode) {
-      for (let i = 0; i < cutRanges.length; i++) {
-        const [start, end] = cutRanges[i];
-        if (current >= start && current < end) {
-          videoRef.current.currentTime = end;
-          break; 
-        }
+      // Find if we are currently inside any cut range
+      const activeRange = cutRanges.find(([start, end]) => current >= start && current < end);
+      
+      if (activeRange) {
+        // Jump to end of range + tiny buffer to avoid precision loops
+        videoRef.current.currentTime = activeRange[1] + 0.05;
       }
     }
   };
