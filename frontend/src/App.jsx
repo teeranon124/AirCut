@@ -117,19 +117,24 @@ function App() {
           <UploadZone onUploadSuccess={handleUploadSuccess} apiBase={API_BASE} setStatus={setStatus} />
         )}
 
-        {status === 'processing' && (
+        {(status === 'processing' || status === 'uploading') && (
           <div className="max-w-2xl mx-auto py-20 text-center space-y-8 bg-white p-10 rounded-3xl shadow-2xl border border-slate-100">
             <div className="relative w-24 h-24 mx-auto">
               <div className="absolute inset-0 rounded-full border-8 border-indigo-50"></div>
               <div className="absolute inset-0 rounded-full border-8 border-indigo-600 border-t-transparent animate-spin"></div>
-              <div className="absolute inset-0 flex items-center justify-center font-black text-indigo-600">{progress}%</div>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-indigo-600">{status === 'uploading' ? '...' : `${progress}%`}</div>
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-black text-slate-800">{statusText}</h2>
-              <p className="text-slate-400 text-sm italic">ระบบกำลังทำงาน... กรุณารอสักครู่</p>
+              <h2 className="text-2xl font-black text-slate-800">
+                {status === 'uploading' ? 'กำลังอัปโหลดวิดีโอ...' : statusText}
+              </h2>
+              <p className="text-slate-400 text-sm italic">กรุณาอย่าปิดหน้าต่างนี้ ระบบกำลังทำงานให้คุณ</p>
             </div>
             <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border">
-              <div className="h-full bg-indigo-600 transition-all duration-500 shadow-lg" style={{ width: `${progress}%` }}></div>
+              <div 
+                className="h-full bg-indigo-600 transition-all duration-500 shadow-lg" 
+                style={{ width: status === 'uploading' ? '10%' : `${progress}%` }}
+              ></div>
             </div>
           </div>
         )}
