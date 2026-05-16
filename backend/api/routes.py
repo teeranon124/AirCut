@@ -114,8 +114,27 @@ async def export_project(request: ExportRequest):
     return {"download_url": f"/download/{job_id}"}
 
 @router.get("/download/{job_id}")
-async def download_file(job_id: str):
+async def download_file(job_id: str, background_tasks: BackgroundTasks):
     zip_path = os.path.join(UPLOAD_DIR, f"{job_id}_export.zip")
     if not os.path.exists(zip_path):
         raise HTTPException(status_code=404, detail="Export file not found")
+    
+    # สั่งลบไฟล์ขยะทั้งหมดที่เกี่ยวกับ Job นี้หลังจากส่งไฟล์ให้ลูกค้าแล้ว
+    background_tasks.add_task(cleanup_job_files, job_id)
+    
     return FileResponse(zip_path, media_type='application/zip', filename="autocut_export.zip")
+
+def cleanup_job_files(job_id: str):
+    """
+    ลบไฟล์ทุกไฟล์ที่มี job_id อยู่ในชื่อ เพื่อคืนพื้นที่ให้เซิร์ฟเวอร์
+    """
+    print(f"[Cleanup] เริ่มลบไฟล์ขยะสำหรับ Job: {job_id}")
+    try:
+        for filename in os.listdir(UPLOAD_DIR):
+            if job_id in filename:
+                file_path = os.path.join(UPLOAD_DIR, filename)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    print(f"[Cleanup] ลบสำเร็จ: {filename}")
+    except Exception as e:
+        print(f"[Cleanup Error] ไม่สามารถลบไฟล์ได้: {e}")
