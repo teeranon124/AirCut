@@ -111,6 +111,7 @@ function UploadZone({ onUploadSuccess, apiBase, setStatus }) {
                       <span className="text-xs uppercase">{model.label}</span>
                       {modelSize === model.id && <ChevronRight className="w-3 h-3 text-indigo-600" />}
                     </div>
+
                     <div className={`text-[10px] leading-relaxed font-medium ${modelSize === model.id ? 'text-indigo-500' : 'text-slate-400'}`}>
                       {model.desc}
                     </div>

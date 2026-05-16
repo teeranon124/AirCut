@@ -12,36 +12,42 @@ def slice_video(input_path: str, output_path: str, keep_ranges: list, job_id: st
 
     try:
         input_stream = ffmpeg.input(input_path)
-        video_segments = []
-        audio_segments = []
+        concat_inputs = []
 
         # Create filter chains for each keep range
         for i, (start, end) in enumerate(keep_ranges):
+            # Interleave video and audio for each segment
             v = input_stream.video.trim(start=start, end=end).setpts('PTS-STARTPTS')
             a = input_stream.audio.filter('atrim', start=start, end=end).filter('asetpts', 'PTS-STARTPTS')
-            video_segments.append(v)
-            audio_segments.append(a)
+            concat_inputs.extend([v, a])
 
-        # Concat all segments into a single video/audio stream
-        joined = ffmpeg.concat(*video_segments, *audio_segments, v=1, a=1).node
+        # Concat expects interleaved inputs: [v0, a0, v1, a1, ...]
+        joined = ffmpeg.concat(*concat_inputs, v=1, a=1).node
         
         # Output with fast encoding to ensure accuracy and speed
-        (
-            ffmpeg
-            .output(
-                joined[0], joined[1], 
-                output_path, 
-                vcodec='libx264', 
-                acodec='aac', 
-                preset='ultrafast', # Maximize speed
-                crf=23              # Standard quality balance
+        try:
+            (
+                ffmpeg
+                .output(
+                    joined[0], joined[1], 
+                    output_path, 
+                    vcodec='libx264', 
+                    acodec='aac', 
+                    preset='ultrafast',
+                    crf=28,             # Slightly higher CRF for faster encoding on limited CPU
+                    threads=1           # Limit threads to avoid crashing free tier CPU
+                )
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
             )
-            .overwrite_output()
-            .run(quiet=True)
-        )
+        except ffmpeg.Error as e:
+            print(f"FFmpeg Stdout: {e.stdout.decode() if e.stdout else 'None'}")
+            print(f"FFmpeg Stderr: {e.stderr.decode() if e.stderr else 'None'}")
+            return False
+            
         return True
-    except ffmpeg.Error as e:
-        print(f"Error slicing video: {e}")
+    except Exception as e:
+        print(f"Error constructing FFmpeg filter chain: {e}")
         return False
 
 def create_export_zip(zip_path: str, files_to_include: list):
