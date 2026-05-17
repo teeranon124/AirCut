@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Play, Eye, EyeOff } from 'lucide-react';
 
-function VideoPreview({ videoUrl, seekTime, currentTime, cutRanges, onTimeUpdate, activeSubtitle }) {
+function VideoPreview({ videoUrl, seekTime, currentTime, cutRanges, onTimeUpdate, activeSubtitle, onLoadedMetadata }) {
   const videoRef = useRef(null);
   const [isPreviewMode, setIsPreviewMode] = useState(true);
   const [duration, setDuration] = useState(0);
@@ -14,7 +14,11 @@ function VideoPreview({ videoUrl, seekTime, currentTime, cutRanges, onTimeUpdate
   }, [seekTime]);
 
   const handleLoadedMetadata = () => {
-    if (videoRef.current) setDuration(videoRef.current.duration);
+    if (videoRef.current) {
+      const d = videoRef.current.duration;
+      setDuration(d);
+      if (onLoadedMetadata) onLoadedMetadata(d);
+    }
   };
 
   // Real-time Skip Logic & Sync

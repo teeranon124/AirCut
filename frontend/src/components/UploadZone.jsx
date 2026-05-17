@@ -2,33 +2,24 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { Upload, Clock, Volume2, Type, ChevronRight } from 'lucide-react';
 
-function UploadZone({ onUploadSuccess, apiBase, setStatus }) {
+function UploadZone({ onFileSelect }) {
   const [isDragging, setIsDragging] = useState(false);
   const [minSilenceLen, setMinSilenceLen] = useState(1000);
   const [silenceThresh, setSilenceThresh] = useState(-40);
-  const [modelSize, setModelSize] = useState('large-v3');
-  const [withSubtitles, setWithSubtitles] = useState(false);
 
-  const handleFile = async (file) => {
+  const handleFile = (file) => {
     if (!file || !file.type.startsWith('video/')) {
       alert('กรุณาอัปโหลดไฟล์วิดีโอ');
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      setStatus('uploading');
-      const res = await axios.post(
-        `${apiBase}/upload?min_silence_len=${minSilenceLen}&silence_thresh=${silenceThresh}&model_size=${modelSize}&with_subtitles=${withSubtitles}`, 
-        formData
-      );
-      onUploadSuccess(res.data.job_id);
-    } catch (err) {
-      alert('อัปโหลดไม่สำเร็จ');
-      setStatus('idle');
+    // Limit file size to 500MB for WASM stability
+    if (file.size > 500 * 1024 * 1024) {
+      alert('ไฟล์มีขนาดใหญ่เกินไป (จำกัดไม่เกิน 500MB) เพื่อความเสถียรของเบราว์เซอร์');
+      return;
     }
+
+    onFileSelect(file, minSilenceLen, silenceThresh);
   };
 
   return (

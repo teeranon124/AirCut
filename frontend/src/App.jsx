@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import UploadZone from './components/UploadZone';
 import SilenceEditor from './components/SilenceEditor';
 // import SubtitleEditor from './components/SubtitleEditor';
@@ -10,7 +12,6 @@ import { Loader2, XCircle } from 'lucide-react';
 const API_BASE = 'https://aircut.onrender.com';
 
 function App() {
-  const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState('idle');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -20,37 +21,101 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
   const [isPro, setIsPro] = useState(false);
+  
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+  
+  // FFmpeg State
+  const ffmpegRef = useRef(new FFmpeg());
+  const [isFFmpegLoaded, setIsFFmpegLoaded] = useState(false);
 
+  // Initialize FFmpeg
   useEffect(() => {
-    let interval;
-    if (status === 'processing' && jobId) {
-      interval = setInterval(async () => {
-        try {
-          const res = await axios.get(`${API_BASE}/status/${jobId}`);
-          if (res.data.progress_percent !== undefined) setProgress(res.data.progress_percent);
-          if (res.data.progress_status) setStatusText(res.data.progress_status);
-          if (res.data.status === 'completed') {
-            setData(res.data);
-            setStatus('completed');
-            setCutIndices(res.data.silence.map((_, i) => i));
-            clearInterval(interval);
-          } else if (res.data.status === 'failed') {
-            setError(res.data.error);
-            setStatus('failed');
-            clearInterval(interval);
-          }
-        } catch (err) { console.error(err); }
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [status, jobId]);
+    loadFFmpeg();
+  }, []);
 
-  const handleUploadSuccess = (id) => {
-    setJobId(id);
+  const loadFFmpeg = async () => {
+    // Check if security headers (COOP/COEP) are working
+    if (!window.crossOriginIsolated) {
+      console.warn('Cross-Origin Isolation is not enabled. WASM might fail.');
+    }
+
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    const ffmpeg = ffmpegRef.current;
+    
+    ffmpeg.on('log', ({ message }) => {
+      console.log(message);
+    });
+
+    ffmpeg.on('progress', ({ progress }) => {
+      setProgress(Math.round(progress * 100));
+    });
+
+    try {
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
+      setIsFFmpegLoaded(true);
+    } catch (err) {
+      console.error('FFmpeg Load Error:', err);
+      throw new Error('ไม่สามารถโหลดตัวประมวลผลวิดีโอได้ กรุณารีเฟรชหน้าเว็บ');
+    }
+  };
+
+  const handleFileSelect = async (file, minSilenceLen, silenceThresh) => {
+    setVideoFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setVideoUrl(localUrl);
+    
     setStatus('processing');
-    setProgress(0);
-    setCurrentTime(0);
-    setSeekTime(null);
+    setStatusText('กำลังเตรียมระบบ...');
+    setProgress(5);
+
+    try {
+      const ffmpeg = ffmpegRef.current;
+      if (!isFFmpegLoaded) {
+        setStatusText('กำลังโหลดตัวประมวลผล (ครั้งแรก)...');
+        await loadFFmpeg();
+      }
+
+      // 1. Write file to WASM FS
+      setStatusText('กำลังดึงข้อมูลเสียง (ทำงานบนเครื่องคุณ)...');
+      await ffmpeg.writeFile('input.mp4', await fetchFile(file));
+
+      // 2. Extract Audio
+      await ffmpeg.exec(['-i', 'input.mp4', '-vn', '-acodec', 'pcm_s16le', '-ar', '44100', '-ac', '1', 'audio.wav']);
+      
+      const audioData = await ffmpeg.readFile('audio.wav');
+      const audioBlob = new Blob([audioData.buffer], { type: 'audio/wav' });
+
+      // 3. Send only Audio to Backend for AI Analysis
+      setStatusText('กำลังวิเคราะห์ช่วงเงียบด้วย AI...');
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'audio.wav');
+      
+      const res = await axios.post(
+        `${API_BASE}/analyze-silence?min_silence_len=${minSilenceLen}&silence_thresh=${silenceThresh}`, 
+        formData
+      );
+
+      // 4. Setup Project State
+      setData({
+        silence: res.data.silence,
+        video_filename: file.name,
+        segments: [] 
+      });
+      setCutIndices(res.data.silence.map((_, i) => i));
+      setStatus('completed');
+      setStatusText('พร้อมตัดต่อ!');
+      setProgress(100);
+
+    } catch (err) {
+      console.error(err);
+      setError('เกิดข้อผิดพลาดในการประมวลผลบนเบราว์เซอร์');
+      setStatus('failed');
+    }
   };
 
   const handleSeek = (time) => {
@@ -65,7 +130,7 @@ function App() {
 
   const calculatedKeepRanges = React.useMemo(() => {
     if (!data) return [];
-    const totalDuration = 3600; 
+    const totalDuration = videoDuration || 3600; 
     const padding = 0.2;
     let keeps = [];
     let lastEnd = 0;
@@ -81,12 +146,11 @@ function App() {
     });
     if (lastEnd < totalDuration) keeps.push([lastEnd, totalDuration]);
     return cutIndices.length === 0 ? [[0, totalDuration]] : keeps;
-  }, [data, cutIndices]);
+  }, [data, cutIndices, videoDuration]);
 
   const cutRanges = React.useMemo(() => {
     if (!calculatedKeepRanges || calculatedKeepRanges.length <= 1) return [];
     let gaps = [];
-    // Calculate gaps between keep ranges (these are the segments to skip)
     for (let i = 0; i < calculatedKeepRanges.length - 1; i++) {
       const currentEnd = calculatedKeepRanges[i][1];
       const nextStart = calculatedKeepRanges[i+1][0];
@@ -126,7 +190,7 @@ function App() {
 
       <main className="max-w-7xl mx-auto p-4 md:p-8">
         {status === 'idle' && (
-          <UploadZone onUploadSuccess={handleUploadSuccess} apiBase={API_BASE} setStatus={setStatus} />
+          <UploadZone onFileSelect={handleFileSelect} />
         )}
 
         {(status === 'processing' || status === 'uploading') && (
@@ -134,18 +198,16 @@ function App() {
             <div className="relative w-24 h-24 mx-auto">
               <div className="absolute inset-0 rounded-full border-8 border-indigo-50"></div>
               <div className="absolute inset-0 rounded-full border-8 border-indigo-600 border-t-transparent animate-spin"></div>
-              <div className="absolute inset-0 flex items-center justify-center font-black text-indigo-600">{status === 'uploading' ? '...' : `${progress}%`}</div>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-indigo-600">{progress}%</div>
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-black text-slate-800">
-                {status === 'uploading' ? 'กำลังอัปโหลดวิดีโอ...' : statusText}
-              </h2>
-              <p className="text-slate-400 text-sm italic">กรุณาอย่าปิดหน้าต่างนี้ ระบบกำลังทำงานให้คุณ</p>
+              <h2 className="text-2xl font-black text-slate-800">{statusText}</h2>
+              <p className="text-slate-400 text-sm italic">กรุณาอย่าปิดหน้าต่างนี้ ระบบกำลังทำงานในเบราว์เซอร์ของคุณ</p>
             </div>
             <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border">
               <div 
                 className="h-full bg-indigo-600 transition-all duration-500 shadow-lg" 
-                style={{ width: status === 'uploading' ? '10%' : `${progress}%` }}
+                style={{ width: `${progress}%` }}
               ></div>
             </div>
           </div>
@@ -162,25 +224,26 @@ function App() {
 
         {status === 'completed' && data && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Column: Video Preview & Export */}
             <div className="lg:col-span-7 lg:sticky lg:top-24 space-y-6">
               <VideoPreview 
-                videoUrl={`${API_BASE}/previews/${data.video_filename}`} 
+                videoUrl={videoUrl} 
                 seekTime={seekTime}
                 currentTime={currentTime}
                 cutRanges={cutRanges}
                 onTimeUpdate={(t) => setCurrentTime(t)}
+                onLoadedMetadata={(d) => setVideoDuration(d)}
               />
               <ExportButton 
-                jobId={jobId} 
+                ffmpeg={ffmpegRef.current}
+                videoFile={videoFile}
                 keepRanges={calculatedKeepRanges} 
-                subtitles={data.segments} 
-                apiBase={API_BASE} 
                 isPro={isPro} 
+                onProgress={(p) => setProgress(p)}
+                onStatus={(s) => setStatusText(s)}
+                setStatus={setStatus}
               />
             </div>
             
-            {/* Right Column: Editor */}
             <div className="lg:col-span-5 space-y-8 pb-20">
               <SilenceEditor 
                 silence={data.silence} 
@@ -190,10 +253,10 @@ function App() {
               />
               
               <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <h3 className="font-black text-slate-800 mb-2 uppercase tracking-widest text-[10px]">สรุปผลการตัดต่อ</h3>
+                <h3 className="font-black text-slate-800 mb-2 uppercase tracking-widest text-[10px]">สรุปผลการตัดต่อ (WASM Mode)</h3>
                 <p className="text-sm text-slate-500 leading-relaxed">
                   ระบบตรวจพบช่วงเงียบ <strong>{data.silence.length}</strong> จุด 
-                  วิดีโอจะถูกตัดต่ออย่างรวดเร็วด้วยเทคนิค Stream Copy
+                  วิดีโอจะถูกตัดต่อโดยตรงในเบราว์เซอร์ของคุณ ไม่มีการอัปโหลดวิดีโอขึ้นเซิร์ฟเวอร์
                 </p>
               </div>
             </div>

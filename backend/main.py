@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from backend.api import routes
 import os
+import shutil
 
-app = FastAPI(title="AutoCut & Caption API")
+app = FastAPI(title="AutoCut AI - WASM Core")
 
 # Configure CORS
 app.add_middleware(
@@ -15,14 +15,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve temp_storage for video previews
+# Startup Cleanup
 UPLOAD_DIR = "backend/temp_storage"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
-app.mount("/previews", StaticFiles(directory=UPLOAD_DIR), name="previews")
 
 app.include_router(routes.router)
 
+@app.on_event("startup")
+async def startup_event():
+    """
+    Clear all temp files on start.
+    """
+    try:
+        for filename in os.listdir(UPLOAD_DIR):
+            file_path = os.path.join(UPLOAD_DIR, filename)
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+        print("[Startup] Cleaned storage.")
+    except Exception as e:
+        print(f"Startup Warning: {e}")
+
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to AutoCut & Caption API"}
+    return {"message": "AutoCut AI Analysis API is Live"}
