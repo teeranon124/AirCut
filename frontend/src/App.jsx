@@ -52,7 +52,7 @@ function App() {
       setProgress(Math.round(progress * 100));
     });
 
-    try {
+    try { 
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
