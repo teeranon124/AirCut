@@ -4,7 +4,7 @@ from backend.api import routes
 import os
 import shutil
 
-app = FastAPI(title="AutoCut AI - WASM Core")
+app = FastAPI(title="Aircut AI - WASM Core")
 
 # Configure CORS
 app.add_middleware(
@@ -38,4 +38,4 @@ async def startup_event():
 
 @app.get("/")
 def read_root():
-    return {"message": "AutoCut AI Analysis API is Live"}
+    return {"message": "Aircut AI Analysis API is Live"}

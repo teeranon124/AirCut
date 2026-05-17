@@ -165,8 +165,9 @@ function App() {
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
       <header className="h-16 border-b bg-white flex items-center px-6 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-black text-indigo-600 tracking-tight italic">AUTOCUT</h1>
+          <div className="flex items-center gap-3">
+            <img src="/aircut.png" alt="Aircut Logo" className="w-8 h-8 object-contain" />
+            <h1 className="text-xl font-black text-indigo-600 tracking-tight italic hidden sm:block">AIRCUT</h1>
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPro ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
               {isPro ? 'PRO MEMBER' : 'FREE VERSION'}
             </span>

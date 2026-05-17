@@ -56,7 +56,7 @@ function ExportButton({ ffmpeg, videoFile, keepRanges, isPro, onProgress, onStat
       // AUTOMATIC DOWNLOAD
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'autocut_pro.mp4');
+      link.setAttribute('download', 'aircut_video.mp4');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -129,7 +129,7 @@ function ExportButton({ ffmpeg, videoFile, keepRanges, isPro, onProgress, onStat
           <div className="space-y-3 animate-in fade-in zoom-in-95 duration-500">
             <a
               href={downloadUrl}
-              download="autocut_pro.mp4"
+              download="aircut_video.mp4"
               className="w-full bg-green-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-700 transition-all shadow-lg"
             >
               <Download className="w-4 h-4" />
